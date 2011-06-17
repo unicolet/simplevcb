@@ -35,12 +35,12 @@ config.get("vcb.servers").split(",").each { server ->
 			
 			if (vmObj.needsBackup(now)) {
 				backedup++
-				println "backing up ${vm} into "+vmObj.getNextBackupPath()
+				println "backing up ${vm} into "+vmObj.getNextBackupPath(now)
 
 				def out = new StringBuilder()
 				def err = new StringBuilder()
 				
-				def proc = ("C:\\Program Files\\VMware\\VMware Consolidated Backup Framework\\vcbMounter.exe -h ${server} -u ${user} -p ${password} -t fullvm -r "+vmObj.getNextBackupPath()+" -a name:${vm} -m san -M 1 -F 1").execute()
+				def proc = ("C:\\Program Files\\VMware\\VMware Consolidated Backup Framework\\vcbMounter.exe -h ${server} -u ${user} -p ${password} -t fullvm -r "+vmObj.getNextBackupPath(now)+" -a name:${vm} -m san -M 1 -F 1").execute()
 				proc.waitForProcessOutput(out, err)
 				vmObj.saveLogFile(out,err)
 				
@@ -100,10 +100,10 @@ class VM {
 		return new File(config.get("vcb.server.${server}.exportpath".toString())+"\\"+name)
 	}
 	
-	def getNextBackupPath() {
+	def getNextBackupPath(now) {
 		def bp=getBasePath()
 		if (!bp.exists()) bp.mkdirs()
-		return new File( bp.getAbsolutePath()+"\\"+ name + "-" + df.format(new Date()) )
+		return new File( bp.getAbsolutePath()+"\\"+ name + "-" + df.format(now) )
 	}
 	
 	def saveLogFile(out,err) {
