@@ -60,7 +60,7 @@ Simple VCB is not perfect, the following features are planned:
 
 - make the vcbMounter path configurable (at the moment it is hardcoded in the script)
 
-- better logging
+- better logging [DONE, via log4j]
 
 - email alerting (can currently be done with help from http://www.blat.net/)
 
