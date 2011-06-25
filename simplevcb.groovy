@@ -1,17 +1,10 @@
-/*
-	This is a groovy script (http://groovy.codehaus.org/)
-
-	It has been written by Umberto Nicoletti
-	and you can get the latest version, docs, submit feat requests/bugs at:
-	
-	https://github.com/unicolet/simplevcb
-	
-	Released under the GPL in 2011.
-*/
-
+//groovy script
 import java.io.*
 import java.util.*
 import java.text.SimpleDateFormat
+import org.apache.log4j.*
+
+log = Logger.getLogger(this.class);
 
 def startTime=System.currentTimeMillis()
 def backedup=0
@@ -19,10 +12,10 @@ def backedup=0
 now=new Date()
 
 def config=new Properties()
-config.load(new FileInputStream("simplevcb.config"))
+config.load(new FileInputStream("vcb.config"))
 
 config.get("vcb.servers").split(",").each { server ->
-	println "Processing server: ${server}"
+	log.info "Processing server: ${server}"
 	def user=config.get("vcb.server.${server}.user".toString())
 	def password=config.get("vcb.server.${server}.password".toString())
 	
@@ -31,11 +24,11 @@ config.get("vcb.servers").split(",").each { server ->
 			// remove white spaces
 			def vm=v.trim()
 			def vmObj=new VM(name:vm, server:server, config:config).init()
-			println vmObj
+			log.info vmObj
 			
 			if (vmObj.needsBackup(now)) {
 				backedup++
-				println "backing up ${vm} into "+vmObj.getNextBackupPath(now)
+				log.info "backing up ${vm} into "+vmObj.getNextBackupPath(now)
 
 				def out = new StringBuilder()
 				def err = new StringBuilder()
@@ -43,10 +36,13 @@ config.get("vcb.servers").split(",").each { server ->
 				def proc = ("C:\\Program Files\\VMware\\VMware Consolidated Backup Framework\\vcbMounter.exe -h ${server} -u ${user} -p ${password} -t fullvm -r "+vmObj.getNextBackupPath(now)+" -a name:${vm} -m san -M 1 -F 1").execute()
 				proc.waitForProcessOutput(out, err)
 				vmObj.saveLogFile(out,err)
+				if (proc.exitValue()!=0) {
+					log.error "[${vm} backup failed] vcbMounter exit code: "+proc.exitValue()
+				}
 				
 				vmObj.purgeOldBackups()
 			} else {
-				println "${vm} does not need to be backed up"
+				log.info "${vm} does not need to be backed up"
 			}
 		}
 	}
@@ -87,7 +83,7 @@ class VM {
 						
 						result = (now-date >= interval.toInteger())
 					} catch(Exception e) {
-						println "${e}"
+						log.info "${e}"
 					}
 				}
 			}
@@ -123,11 +119,11 @@ class VM {
 				dateA.equals(dateB) ? 0 : dateA > dateB ? -1 : 1 
 			}
 		
-		println "server ${name} backups: " + backups.toString()
+		log.info "server ${name} backups: " + backups.toString()
 		// remove all at index >= protection
 		if (backups.size() > protection.toInteger()) {
             for(def i=protection.toInteger()-1;i<backups.size();i++) {
-                println "server ${name} remove backup: "+backups[i]
+                log.info "server ${name} remove backup: "+backups[i]
                 new AntBuilder().delete(dir: backups[i])
             }
         }
@@ -137,7 +133,6 @@ class VM {
 def endTime=System.currentTimeMillis()
 def duration=Math.round(((endTime-startTime)/60000))
 
-println "--------------------------------------------"
-println " Backed up ${backedup} vms in "+(duration)+"m"
-println "--------------------------------------------"
-
+log.info "--------------------------------------------"
+log.info " Backed up ${backedup} vms in "+(duration)+"m"
+log.info "--------------------------------------------"
