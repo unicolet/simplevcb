@@ -11,41 +11,46 @@ def backedup=0
 
 now=new Date()
 
-def config=new Properties()
-config.load(new FileInputStream("vcb.config"))
+try {
+	def config=new Properties()
+	config.load(new FileInputStream("vcb.config"))
 
-config.get("vcb.servers").split(",").each { server ->
-	log.info "Processing server: ${server}"
-	def user=config.get("vcb.server.${server}.user".toString())
-	def password=config.get("vcb.server.${server}.password".toString())
-	
-	if(config.get("vcb.server.${server}.vms".toString())) {
-		config.get("vcb.server.${server}.vms".toString()).split(",").each { v ->
-			// remove white spaces
-			def vm=v.trim()
-			def vmObj=new VM(name:vm, server:server, config:config).init()
-			log.info vmObj
-			
-			if (vmObj.needsBackup(now)) {
-				backedup++
-				log.info "backing up ${vm} into "+vmObj.getNextBackupPath(now)
-
-				def out = new StringBuilder()
-				def err = new StringBuilder()
+	config.get("vcb.servers").split(",").each { server ->
+		log.info "Processing server: ${server}"
+		def user=config.get("vcb.server.${server}.user".toString())
+		def password=config.get("vcb.server.${server}.password".toString())
+		
+		if(config.get("vcb.server.${server}.vms".toString())) {
+			config.get("vcb.server.${server}.vms".toString()).split(",").each { v ->
+				// remove white spaces
+				def vm=v.trim()
+				def vmObj=new VM(name:vm, server:server, config:config, log:log).init()
+				log.info vmObj
 				
-				def proc = ("C:\\Program Files\\VMware\\VMware Consolidated Backup Framework\\vcbMounter.exe -h ${server} -u ${user} -p ${password} -t fullvm -r "+vmObj.getNextBackupPath(now)+" -a name:${vm} -m san -M 1 -F 1").execute()
-				proc.waitForProcessOutput(out, err)
-				vmObj.saveLogFile(out,err)
-				if (proc.exitValue()!=0) {
-					log.error "[${vm} backup failed] vcbMounter exit code: "+proc.exitValue()
+				if (vmObj.needsBackup(now)) {
+					backedup++
+					log.info "backing up ${vm} into "+vmObj.getNextBackupPath(now)
+
+					def out = new StringBuilder()
+					def err = new StringBuilder()
+					
+					def proc = ("C:\\Program Files\\VMware\\VMware Consolidated Backup Framework\\vcbMounter.exe -h ${server} -u ${user} -p ${password} -t fullvm -r "+vmObj.getNextBackupPath(now)+" -a name:${vm} -m san -M 1 -F 1").execute()
+					proc.waitForProcessOutput(out, err)
+					vmObj.saveLogFile(out,err)
+					if (proc.exitValue()!=0) {
+						log.error "[${vm} backup failed] vcbMounter exit code: "+proc.exitValue()
+					}
+					
+					vmObj.purgeOldBackups()
+				} else {
+					log.info "${vm} does not need to be backed up"
 				}
-				
-				vmObj.purgeOldBackups()
-			} else {
-				log.info "${vm} does not need to be backed up"
 			}
 		}
 	}
+} catch (Exception e) {
+	log.error("backup failed  because of an exception: "+e.getMessage())
+	log.error(e)
 }
 
 class VM {
@@ -55,6 +60,7 @@ class VM {
 	def protection
 	def server
 	def config
+	def log
 	
 	def init() {
 		protection = config.get("vcb.server.${server}.vm.${name}.protection".toString())!=null ?
@@ -136,3 +142,4 @@ def duration=Math.round(((endTime-startTime)/60000))
 log.info "--------------------------------------------"
 log.info " Backed up ${backedup} vms in "+(duration)+"m"
 log.info "--------------------------------------------"
+
