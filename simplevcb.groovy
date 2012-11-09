@@ -3,13 +3,41 @@ import java.io.*
 import java.util.*
 import java.text.SimpleDateFormat
 import org.apache.log4j.*
+import java.util.concurrent.*
 
 log = Logger.getLogger(this.class);
 
 def startTime=System.currentTimeMillis()
 def backedup=0
 
-now=new Date()
+// allocate a worker pool with 2 threads. To allocate more threads (and parallelize more)
+// change the argument value. Setting a value larger than 4 might hurt performance,
+// optimal values are 2 or 3 (YMMV).
+def pool = Executors.newFixedThreadPool(2)
+def tasks=[]
+
+def now=new Date()
+
+def backupOperation = { server, user, password, vm, vmObj ->
+	if (vmObj.needsBackup(now)) {
+		backedup++
+		log.info "backing up ${vm} into "+vmObj.getNextBackupPath(now)
+
+		def out = new StringBuilder()
+		def err = new StringBuilder()
+		
+		def proc = ("C:\\Program Files\\VMware\\VMware Consolidated Backup Framework\\vcbMounter.exe -h ${server} -u ${user} -p ${password} -t fullvm -r "+vmObj.getNextBackupPath(now)+" -a name:${vm} -m san -M 1 -F 1").execute()
+		proc.waitForProcessOutput(out, err)
+		vmObj.saveLogFile(out,err)
+		if (proc.exitValue()!=0) {
+			log.error "[${vm} backup failed] vcbMounter exit code: "+proc.exitValue()
+		}
+		
+		vmObj.purgeOldBackups()
+	} else {
+		log.info "${vm} does not need to be backed up"
+	}
+}
 
 try {
 	def config=new Properties()
@@ -27,27 +55,12 @@ try {
 				def vmObj=new VM(name:vm, server:server, config:config, log:log).init()
 				log.info vmObj
 				
-				if (vmObj.needsBackup(now)) {
-					backedup++
-					log.info "backing up ${vm} into "+vmObj.getNextBackupPath(now)
-
-					def out = new StringBuilder()
-					def err = new StringBuilder()
-					
-					def proc = ("C:\\Program Files\\VMware\\VMware Consolidated Backup Framework\\vcbMounter.exe -h ${server} -u ${user} -p ${password} -t fullvm -r "+vmObj.getNextBackupPath(now)+" -a name:${vm} -m san -M 1 -F 1").execute()
-					proc.waitForProcessOutput(out, err)
-					vmObj.saveLogFile(out,err)
-					if (proc.exitValue()!=0) {
-						log.error "[${vm} backup failed] vcbMounter exit code: "+proc.exitValue()
-					}
-					
-					vmObj.purgeOldBackups()
-				} else {
-					log.info "${vm} does not need to be backed up"
-				}
+				tasks << pool.submit( { -> backupOperation server, user, password, vm, vmObj } as Callable )
 			}
 		}
 	}
+	
+	tasks.collect { it.get() }	
 } catch (Exception e) {
 	log.error("backup failed  because of an exception: "+e.getMessage())
 	log.error(e)
@@ -142,4 +155,3 @@ def duration=Math.round(((endTime-startTime)/60000))
 log.info "--------------------------------------------"
 log.info " Backed up ${backedup} vms in "+(duration)+"m"
 log.info "--------------------------------------------"
-
