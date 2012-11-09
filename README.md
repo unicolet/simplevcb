@@ -1,8 +1,8 @@
 Simple VCB (vcb for the rest of us)
 ===================================
 
-Getting backups done in vmware environments is easy.
-Getting backups done right is difficult.
+Still using VCB, maybe because (like me) like it's free and 'it just works'?
+Then maybe Simple VCB can help you:
 
 Simple VCB is a wrapper script around *vcbMounter* which attempts to
 simplify its usage by providing a free, off-the-shelf scripted solution
@@ -21,6 +21,10 @@ Simple VCB can:
 - the backup policy allows you to specify interval (how often we should backup the vms, min
   frequency is every day) and protection (how many copies we should keep around
   for each vm)
+
+- (new) run vcb jobs concurrently (by default 2, but can be configured to any level you want)
+  to improve performance. In my experience switching from serial to two parallel workers cut backup time
+  in half. To change the concurrency level edit the script at [line 16][https://github.com/unicolet/simplevcb/blob/master/simplevcb.groovy#L16].
 
 For instance you can tell Simple VCB to backup only vms vm1,vm2 and vm3
 on server esxi01 (not vm4 because maybe it is not in production yet).
