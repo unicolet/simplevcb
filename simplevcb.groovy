@@ -66,6 +66,8 @@ try {
 	log.error(e)
 }
 
+pool.shutdown()
+
 class VM {
 	def df=new SimpleDateFormat("ddMMyyyy")
 	def name
